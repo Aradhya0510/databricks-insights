@@ -202,10 +202,7 @@ def execute_sql_file(file_path, replacements=None, skip_errors=None):
                     should_skip = any(err in error_str for err in skip_errors)
                     
                     if should_skip:
-                        if 'PERMISSION_DENIED' in error_str and 'CREATE CATALOG' in stmt:
-                            print(f"⚠ Skipped catalog creation (permission denied - catalog may already exist or require metastore admin)")
-                            skipped += 1
-                        elif 'PRINCIPAL_DOES_NOT_EXIST' in error_str or 'does not exist' in error_str.lower() or 'USER_DOES_NOT_EXIST' in error_str:
+                        if 'PRINCIPAL_DOES_NOT_EXIST' in error_str or 'does not exist' in error_str.lower() or 'USER_DOES_NOT_EXIST' in error_str:
                             # Extract which user is missing from the statement
                             user_name = "unknown"
                             if INSIGHTS_USER in stmt or '{INSIGHTS_USER}' in stmt:
