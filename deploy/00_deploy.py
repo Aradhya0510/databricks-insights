@@ -173,6 +173,7 @@ def execute_sql_file(file_path, replacements=None, skip_errors=None):
         # Execute each statement separately
         executed = 0
         skipped = 0
+        failed = 0
         for stmt in statements:
             if stmt.strip():  # Skip empty statements
                 try:
@@ -187,19 +188,27 @@ def execute_sql_file(file_path, replacements=None, skip_errors=None):
                         if 'PERMISSION_DENIED' in error_str and 'CREATE CATALOG' in stmt:
                             print(f"⚠ Skipped catalog creation (permission denied - catalog may already exist or require metastore admin)")
                             skipped += 1
-                        elif 'PRINCIPAL_DOES_NOT_EXIST' in error_str:
-                            print(f"⚠ Skipped grant (principal not found - ensure {ADMIN_GROUP} and {APP_SERVICE_PRINCIPAL} exist)")
+                        elif 'PRINCIPAL_DOES_NOT_EXIST' in error_str or 'does not exist' in error_str.lower():
+                            # Extract which principal is missing from the statement
+                            principal_name = "unknown"
+                            if ADMIN_GROUP in stmt or 'databricks-insights-admins' in stmt:
+                                principal_name = ADMIN_GROUP
+                            elif APP_SERVICE_PRINCIPAL in stmt or 'databricks-insights-app-sp' in stmt:
+                                principal_name = APP_SERVICE_PRINCIPAL
+                            
+                            print(f"⚠ Skipped grant to '{principal_name}' (principal not found - create it first or update config.py)")
                             skipped += 1
                         else:
                             print(f"⚠ Skipped statement (expected error): {stmt[:80]}...")
                             skipped += 1
                     else:
-                        print(f"⚠ Error executing statement: {stmt[:100]}...")
+                        print(f"✗ Error executing statement: {stmt[:100]}...")
                         print(f"   Error: {error_str[:200]}")
+                        failed += 1
                         # Continue with next statement
                         continue
         
-        return executed, skipped
+        return executed, skipped, failed
     except FileNotFoundError:
         raise FileNotFoundError(f"SQL file not found: {file_path}")
     except Exception as e:
@@ -217,15 +226,34 @@ try:
         '{SCHEMA}': quoted_schema
     }
     
-    executed_count, skipped_count = execute_sql_file(
+    executed_count, skipped_count, failed_count = execute_sql_file(
         setup_sql_path, 
         replacements,
         skip_errors=['PERMISSION_DENIED', 'PRINCIPAL_DOES_NOT_EXIST']
     )
-    print(f"✓ Executed {executed_count} SQL statements")
+    print(f"\n{'='*60}")
+    print(f"Setup SQL Summary:")
+    print(f"  ✓ Executed: {executed_count} statements")
     if skipped_count > 0:
-        print(f"⚠ Skipped {skipped_count} statements (expected errors - see details above)")
-    print("✓ Setup SQL execution completed")
+        print(f"  ⚠ Skipped: {skipped_count} statements (expected - see details above)")
+    if failed_count > 0:
+        print(f"  ✗ Failed: {failed_count} statements (unexpected errors)")
+    print(f"{'='*60}")
+    
+    if skipped_count > 0:
+        print(f"\n📋 Next Steps:")
+        print(f"  1. If catalog creation was skipped: Ensure you have metastore admin privileges")
+        print(f"     OR the catalog '{CATALOG}' already exists")
+        print(f"  2. If grants were skipped: Create the following principals first:")
+        print(f"     - Group/Service Principal: {ADMIN_GROUP}")
+        print(f"     - Service Principal: {APP_SERVICE_PRINCIPAL}")
+        print(f"     Then re-run this notebook or execute the grants manually")
+        print(f"  3. After creating principals, you can re-run just the grant statements from sql/setup.sql")
+    
+    if failed_count == 0:
+        print("✓ Setup SQL execution completed")
+    else:
+        print("⚠ Setup SQL execution completed with some failures")
 except FileNotFoundError as e:
     print(f"⚠ Setup SQL file not found: {e}")
     print("⚠ Please ensure sql/setup.sql exists in the repository.")
