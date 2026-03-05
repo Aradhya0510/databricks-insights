@@ -1,5 +1,5 @@
 -- Phase 3: Currently Failing Jobs View
-CREATE OR REPLACE VIEW observability.databricks_insights.v_currently_failing_jobs AS
+CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.v_currently_failing_jobs AS
 WITH latest_runs AS (
   SELECT
     workspace_id,

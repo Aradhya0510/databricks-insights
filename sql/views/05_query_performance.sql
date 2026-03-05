@@ -1,5 +1,5 @@
 -- Phase 3: Query Performance View
-CREATE OR REPLACE VIEW observability.databricks_insights.v_query_performance AS
+CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.v_query_performance AS
 SELECT
   user_name,
   warehouse_id,

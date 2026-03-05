@@ -1,5 +1,5 @@
 -- Phase 3: Real-Time Cost Burn Rate View
-CREATE OR REPLACE VIEW observability.databricks_insights.v_realtime_burn_rate AS
+CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.v_realtime_burn_rate AS
 WITH hourly AS (
   SELECT
     date_trunc('HOUR', usage_start_time) AS hour,

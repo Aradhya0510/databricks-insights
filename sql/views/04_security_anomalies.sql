@@ -1,5 +1,5 @@
 -- Phase 3: Security Anomaly View
-CREATE OR REPLACE VIEW observability.databricks_insights.v_security_anomalies AS
+CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.v_security_anomalies AS
 
 -- IP Access Denials
 SELECT

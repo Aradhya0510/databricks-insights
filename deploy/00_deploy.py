@@ -161,7 +161,9 @@ def execute_sql_file(file_path, replacements=None):
 try:
     replacements = {
         'databricks-insights-admins': ADMIN_GROUP,
-        'databricks-insights-app-sp': APP_SERVICE_PRINCIPAL
+        'databricks-insights-app-sp': APP_SERVICE_PRINCIPAL,
+        '{CATALOG}': CATALOG,
+        '{SCHEMA}': SCHEMA
     }
     
     executed_count = execute_sql_file(setup_sql_path, replacements)
@@ -207,7 +209,10 @@ for view_file in view_files:
         with open(view_path, 'r') as f:
             view_sql = f.read()
         
-        # Replace schema reference if needed
+        # Replace catalog and schema placeholders
+        view_sql = view_sql.replace('{CATALOG}', CATALOG)
+        view_sql = view_sql.replace('{SCHEMA}', SCHEMA)
+        # Also handle legacy hardcoded values (for backward compatibility)
         view_sql = view_sql.replace('observability.gods_eye', f'{CATALOG}.{SCHEMA}')
         view_sql = view_sql.replace('observability.databricks_insights', f'{CATALOG}.{SCHEMA}')
         

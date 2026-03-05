@@ -7,10 +7,12 @@
 -- ============================================================================
 
 -- Create a dedicated catalog (or use an existing one)
-CREATE CATALOG IF NOT EXISTS observability;
+-- Placeholder {CATALOG} will be replaced with actual catalog name from config
+CREATE CATALOG IF NOT EXISTS {CATALOG};
 
--- Create the databricks_insights schema
-CREATE SCHEMA IF NOT EXISTS observability.databricks_insights
+-- Create the schema
+-- Placeholders {CATALOG} and {SCHEMA} will be replaced with actual values from config
+CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}
   COMMENT 'Databricks Insights workspace observability platform — curated tables for admin dashboards';
 
 -- ============================================================================
@@ -44,10 +46,10 @@ GRANT SELECT ON SCHEMA system.query TO `databricks-insights-admins`;
 -- ============================================================================
 -- Note: Replace 'databricks-insights-app-sp' with your actual service principal name
 
-GRANT USE CATALOG ON CATALOG observability TO `databricks-insights-app-sp`;
-GRANT USE SCHEMA ON SCHEMA observability.databricks_insights TO `databricks-insights-app-sp`;
-GRANT SELECT ON SCHEMA observability.databricks_insights TO `databricks-insights-app-sp`;
-GRANT CREATE TABLE ON SCHEMA observability.databricks_insights TO `databricks-insights-app-sp`;
+GRANT USE CATALOG ON CATALOG {CATALOG} TO `databricks-insights-app-sp`;
+GRANT USE SCHEMA ON SCHEMA {CATALOG}.{SCHEMA} TO `databricks-insights-app-sp`;
+GRANT SELECT ON SCHEMA {CATALOG}.{SCHEMA} TO `databricks-insights-app-sp`;
+GRANT CREATE TABLE ON SCHEMA {CATALOG}.{SCHEMA} TO `databricks-insights-app-sp`;
 
 -- ============================================================================
 -- 4. VERIFY SYSTEM TABLE ACCESS (Optional - for validation)

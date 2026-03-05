@@ -1,5 +1,5 @@
 -- Phase 3: Top Cost Drivers View
-CREATE OR REPLACE VIEW observability.databricks_insights.v_top_cost_drivers AS
+CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.v_top_cost_drivers AS
 SELECT
   identity_metadata.run_as AS user_or_sp,
   billing_origin_product AS product,
