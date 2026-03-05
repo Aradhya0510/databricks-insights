@@ -1,0 +1,69 @@
+# Databricks Asset Bundle Configuration
+# Deploy with: databricks bundle deploy
+
+bundle:
+  name: databricks-insights
+
+workspace:
+  host: https://<your-workspace-url>
+
+variables:
+  warehouse_id:
+    description: Serverless SQL warehouse ID for the app
+  catalog:
+    default: observability
+  schema:
+    default: databricks_insights
+
+resources:
+  pipelines:
+    databricks_insights_pipeline:
+      name: databricks-insights-pipeline
+      target: ${var.catalog}.${var.schema}
+      libraries:
+        - notebook:
+            path: ./pipeline/databricks_insights_pipeline.py
+      configuration:
+        pipeline_type: WORKSPACE
+      clusters:
+        - label: default
+          autoscale:
+            min_workers: 1
+            max_workers: 4
+
+  jobs:
+    databricks_insights_refresh:
+      name: databricks-insights-refresh
+      schedule:
+        quartz_cron_expression: "0 */15 * * * ?"
+        timezone_id: UTC
+      tasks:
+        - task_key: refresh_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.databricks_insights_pipeline.id}
+
+    databricks_insights_zombie_cleanup:
+      name: databricks-insights-zombie-cleanup
+      schedule:
+        quartz_cron_expression: "0 0 */6 * * ?"
+        timezone_id: UTC
+      tasks:
+        - task_key: terminate_zombies
+          notebook_task:
+            notebook_path: ./jobs/auto_terminate_zombies.py
+
+  apps:
+    databricks_insights_app:
+      name: databricks-insights-app
+      source_code_path: ./app/
+      resources:
+        - name: sql-warehouse
+          type: sql_warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: serving-endpoint
+          type: serving_endpoint
+          serving_endpoint:
+            name: databricks-insights-ai-endpoint
+            permission: CAN_QUERY

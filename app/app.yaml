@@ -1,0 +1,21 @@
+command:
+  - python
+  - app.py
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse.id
+  - name: DATABRICKS_SERVING_ENDPOINT
+    valueFrom: serving-endpoint.serving_endpoint_url
+
+resources:
+  - name: sql-warehouse
+    type: sql_warehouse
+    sql_warehouse:
+      id: "<your-warehouse-id>"
+      permission: CAN_USE
+  - name: serving-endpoint
+    type: serving_endpoint
+    serving_endpoint:
+      name: "databricks-insights-ai-endpoint"
+      permission: CAN_QUERY
