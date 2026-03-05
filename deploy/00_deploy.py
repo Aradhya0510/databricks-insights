@@ -1,27 +1,26 @@
-# Databricks Notebook
-# Databricks Insights - One-Shot Deployment
-# This notebook automates the complete deployment of the Databricks Insights platform
+# Databricks notebook source
+# MAGIC %md
+# MAGIC # Databricks Insights - Automated Deployment
+# MAGIC 
+# MAGIC This notebook will deploy the complete Databricks Insights observability platform:
+# MAGIC 1. Create catalog and schema
+# MAGIC 2. Grant system table access
+# MAGIC 3. Create SQL views
+# MAGIC 4. Create Lakeflow pipeline
+# MAGIC 5. Create scheduled jobs
+# MAGIC 6. Deploy Databricks App
+# MAGIC 7. (Optional) Create AI endpoint
+# MAGIC 
+# MAGIC **Prerequisites:**
+# MAGIC - System tables enabled (Account Admin)
+# MAGIC - Databricks Apps enabled (Workspace Admin)
+# MAGIC - Serverless SQL warehouse already created
+# MAGIC - Metastore admin privileges for grants
+
+# COMMAND ----------
 
 # MAGIC %md
-# # Databricks Insights - Automated Deployment
-# 
-# This notebook will deploy the complete Databricks Insights observability platform:
-# 1. Create catalog and schema
-# 2. Grant system table access
-# 3. Create SQL views
-# 4. Create Lakeflow pipeline
-# 5. Create scheduled jobs
-# 6. Deploy Databricks App
-# 7. (Optional) Create AI endpoint
-# 
-# **Prerequisites:**
-# - System tables enabled (Account Admin)
-# - Databricks Apps enabled (Workspace Admin)
-# - Serverless SQL warehouse already created
-# - Metastore admin privileges for grants
-
-# MAGIC %md
-# ## Step 1: Load Configuration
+# MAGIC ## Step 1: Load Configuration
 
 # COMMAND ----------
 
