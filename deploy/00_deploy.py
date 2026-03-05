@@ -30,20 +30,15 @@ import os
 
 # Get notebook path and determine repo root
 notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
-# If running from repo, notebook_path will be like: /Repos/user/repo/deploy/00_deploy
-# Extract repo root
-if notebook_path.startswith('/Repos/'):
-    # Extract path components
-    parts = notebook_path.split('/')
-    # Find 'deploy' and get everything before it
-    if 'deploy' in parts:
-        deploy_idx = parts.index('deploy')
-        repo_root = '/'.join(parts[:deploy_idx])
-    else:
-        repo_root = '/'.join(parts[:-1])  # Remove notebook name
+# Notebook path format: /Workspace/Users/user@domain.com/repo-name/deploy/00_deploy
+# Extract repo root by finding the 'deploy' directory and getting everything before it
+parts = notebook_path.split('/')
+if 'deploy' in parts:
+    deploy_idx = parts.index('deploy')
+    repo_root = '/'.join(parts[:deploy_idx])
 else:
-    # Running from workspace, use current directory
-    repo_root = os.path.dirname(os.path.dirname(notebook_path))
+    # Fallback: remove last two parts (deploy/00_deploy) to get repo root
+    repo_root = '/'.join(parts[:-2]) if len(parts) >= 2 else os.path.dirname(os.path.dirname(notebook_path))
 
 # Add repo root to path
 sys.path.insert(0, repo_root)
@@ -100,28 +95,83 @@ except Exception as e:
 # Read and execute setup SQL
 setup_sql_path = f"{repo_root}/sql/setup.sql"
 
+def execute_sql_file(file_path, replacements=None):
+    """
+    Execute SQL file by splitting into individual statements.
+    spark.sql() can only execute one statement at a time.
+    """
+    try:
+        with open(file_path, 'r') as f:
+            sql_content = f.read()
+        
+        # Replace placeholders if provided
+        if replacements:
+            for old, new in replacements.items():
+                sql_content = sql_content.replace(old, new)
+        
+        # Split SQL into individual statements
+        # Remove comments and empty lines, then split by semicolon
+        statements = []
+        current_statement = []
+        
+        for line in sql_content.split('\n'):
+            # Skip comment-only lines and empty lines
+            stripped = line.strip()
+            if not stripped or stripped.startswith('--'):
+                continue
+            
+            current_statement.append(line)
+            
+            # If line ends with semicolon, it's the end of a statement
+            if stripped.endswith(';'):
+                statement = '\n'.join(current_statement).strip()
+                if statement:
+                    statements.append(statement)
+                current_statement = []
+        
+        # Execute each statement separately
+        executed = 0
+        for stmt in statements:
+            if stmt.strip():  # Skip empty statements
+                try:
+                    spark.sql(stmt)
+                    executed += 1
+                except Exception as e:
+                    print(f"⚠ Error executing statement: {stmt[:100]}...")
+                    print(f"   Error: {e}")
+                    # Continue with next statement
+                    continue
+        
+        return executed
+    except FileNotFoundError:
+        raise FileNotFoundError(f"SQL file not found: {file_path}")
+    except Exception as e:
+        raise Exception(f"Error reading SQL file: {e}")
+
 try:
-    with open(setup_sql_path, 'r') as f:
-        setup_sql = f.read()
+    replacements = {
+        'databricks-insights-admins': ADMIN_GROUP,
+        'databricks-insights-app-sp': APP_SERVICE_PRINCIPAL
+    }
     
-    # Replace placeholders
-    setup_sql = setup_sql.replace('databricks-insights-admins', ADMIN_GROUP)
-    setup_sql = setup_sql.replace('databricks-insights-app-sp', APP_SERVICE_PRINCIPAL)
-    
-    # Execute SQL statements
-    spark.sql(setup_sql)
+    executed_count = execute_sql_file(setup_sql_path, replacements)
+    print(f"✓ Executed {executed_count} SQL statements")
     print("✓ Catalog and schema created")
     print("✓ System table grants executed")
     print("✓ App access granted")
-except FileNotFoundError:
-    print("⚠ Setup SQL file not found. Please ensure sql/setup.sql exists.")
+except FileNotFoundError as e:
+    print(f"⚠ Setup SQL file not found: {e}")
+    print("⚠ Please ensure sql/setup.sql exists in the repository.")
     # Fallback: execute basic setup
-    spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
-    print("✓ Basic catalog and schema created (grants may need manual execution)")
+    try:
+        spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
+        print("✓ Basic catalog and schema created (grants may need manual execution)")
+    except Exception as fallback_error:
+        print(f"⚠ Fallback setup also failed: {fallback_error}")
 except Exception as e:
     print(f"⚠ Error executing setup SQL: {e}")
-    print("You may need to run sql/setup.sql manually as a metastore admin")
+    print("⚠ You may need to run sql/setup.sql manually as a metastore admin")
 
 # COMMAND ----------
 
