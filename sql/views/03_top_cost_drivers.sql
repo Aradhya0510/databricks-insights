@@ -1,10 +1,10 @@
 -- Phase 3: Top Cost Drivers View
 CREATE OR REPLACE VIEW {CATALOG}.{SCHEMA}.v_top_cost_drivers AS
 SELECT
-  identity_metadata.run_as AS user_or_sp,
-  billing_origin_product AS product,
-  sku_name,
-  COALESCE(usage_metadata.job_name, usage_metadata.notebook_path, 'N/A') AS workload_name,
+  u.identity_metadata.run_as AS user_or_sp,
+  u.billing_origin_product AS product,
+  u.sku_name,
+  COALESCE(u.usage_metadata.job_name, u.usage_metadata.notebook_path, 'N/A') AS workload_name,
   SUM(u.usage_quantity) AS total_dbus,
   SUM(u.usage_quantity * lp.pricing.effective_list.default) AS estimated_cost_usd
 FROM system.billing.usage u

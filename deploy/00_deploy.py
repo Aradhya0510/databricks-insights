@@ -29,7 +29,19 @@ import sys
 import os
 
 # Get notebook path and determine repo root
-notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+notebook_path_raw = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+# Notebook path from dbutils may or may not include /Workspace prefix
+# Ensure it starts with /Workspace
+if not notebook_path_raw.startswith('/Workspace'):
+    if notebook_path_raw.startswith('/'):
+        # Path starts with / but not /Workspace, add it
+        notebook_path = '/Workspace' + notebook_path_raw
+    else:
+        # Path doesn't start with /, add /Workspace/
+        notebook_path = '/Workspace/' + notebook_path_raw
+else:
+    notebook_path = notebook_path_raw
+
 # Notebook path format: /Workspace/Users/user@domain.com/repo-name/deploy/00_deploy
 # Extract repo root by finding the 'deploy' directory and getting everything before it
 parts = notebook_path.split('/')
