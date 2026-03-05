@@ -132,7 +132,7 @@ def gold_compute_inventory():
             "cluster_name",
             F.col("owned_by").alias("owner"),
             "cluster_source",
-            "node_type_id",  # Removed driver_node_type_id as it doesn't exist in system.compute.clusters
+            # Removed node_type_id and driver_node_type_id - these columns don't exist in system.compute.clusters
             "autoscale",
             "num_workers",
             F.coalesce("dbus_last_7d", F.lit(0)).alias("dbus_last_7d"),
