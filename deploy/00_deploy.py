@@ -33,12 +33,22 @@ notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext(
 # Notebook path format: /Workspace/Users/user@domain.com/repo-name/deploy/00_deploy
 # Extract repo root by finding the 'deploy' directory and getting everything before it
 parts = notebook_path.split('/')
+# Filter out empty strings from split
+parts = [p for p in parts if p]
+
 if 'deploy' in parts:
     deploy_idx = parts.index('deploy')
-    repo_root = '/'.join(parts[:deploy_idx])
+    # Reconstruct path with leading slash (for /Workspace)
+    repo_root = '/' + '/'.join(parts[:deploy_idx])
 else:
     # Fallback: remove last two parts (deploy/00_deploy) to get repo root
-    repo_root = '/'.join(parts[:-2]) if len(parts) >= 2 else os.path.dirname(os.path.dirname(notebook_path))
+    if len(parts) >= 2:
+        repo_root = '/' + '/'.join(parts[:-2])
+    else:
+        repo_root = os.path.dirname(os.path.dirname(notebook_path))
+
+print(f"📁 Notebook path: {notebook_path}")
+print(f"📁 Repo root: {repo_root}")
 
 # Add repo root to path
 sys.path.insert(0, repo_root)
