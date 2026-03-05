@@ -49,7 +49,7 @@ def layout():
 )
 def update_jobs_panel(_):
     # KPIs
-    stats = run_query("""
+    stats = run_query(f"""
         SELECT
           COUNT(*) AS total_jobs,
           AVG(success_rate_pct) AS avg_success_rate,
@@ -73,7 +73,7 @@ def update_jobs_panel(_):
     ])
 
     # Failing jobs
-    failing = run_query("""
+    failing = run_query(f"""
         SELECT * FROM {SCHEMA_PATH}.v_currently_failing_jobs LIMIT 25
     """)
     failing_table = dbc.Table.from_dataframe(
@@ -82,7 +82,7 @@ def update_jobs_panel(_):
     ) if failing else html.P("All jobs healthy!", className="text-success")
 
     # Job success chart — top 30 jobs by run count
-    job_data = run_query("""
+    job_data = run_query(f"""
         SELECT job_name, success_rate_pct, total_runs_30d, failure_count
         FROM {SCHEMA_PATH}.gold_job_health
         ORDER BY total_runs_30d DESC LIMIT 30
@@ -98,7 +98,7 @@ def update_jobs_panel(_):
     job_fig.update_layout(height=400, xaxis_tickangle=-45)
 
     # Pipeline health
-    pipelines = run_query("""
+    pipelines = run_query(f"""
         SELECT name, total_updates_7d, success_count, failure_count, success_rate_pct
         FROM {SCHEMA_PATH}.gold_pipeline_health
         ORDER BY failure_count DESC

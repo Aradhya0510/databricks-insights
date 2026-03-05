@@ -40,7 +40,7 @@ def layout():
 )
 def update_users_panel(_):
     # Get user stats
-    stats = run_query("""
+    stats = run_query(f"""
         SELECT 
           COUNT(DISTINCT user_email) AS total_users,
           SUM(login_count_30d) AS total_logins,
@@ -64,7 +64,7 @@ def update_users_panel(_):
     ])
 
     # Top users by cost chart
-    top_users = run_query("""
+    top_users = run_query(f"""
         SELECT 
           user_email,
           estimated_cost_30d,
@@ -89,7 +89,7 @@ def update_users_panel(_):
         users_fig = px.bar(template="plotly_dark")
 
     # User activity table
-    activity = run_query("""
+    activity = run_query(f"""
         SELECT 
           user_email,
           login_count_30d,

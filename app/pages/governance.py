@@ -43,7 +43,7 @@ def layout():
 )
 def update_governance_panel(_):
     # Get governance posture
-    posture = run_query("""
+    posture = run_query(f"""
         SELECT 
           SUM(permission_changes_24h) AS total_perm_changes,
           SUM(ip_denials_24h) AS total_ip_denials,
@@ -53,7 +53,7 @@ def update_governance_panel(_):
     """)
 
     # Get anomaly count
-    anomalies = run_query("""
+    anomalies = run_query(f"""
         SELECT COUNT(*) AS cnt FROM {SCHEMA_PATH}.v_security_anomalies
     """)
 
@@ -86,7 +86,7 @@ def update_governance_panel(_):
     ])
 
     # Security anomalies table
-    anomalies_data = run_query("""
+    anomalies_data = run_query(f"""
         SELECT * FROM {SCHEMA_PATH}.v_security_anomalies
         ORDER BY event_time DESC
         LIMIT 50
@@ -97,7 +97,7 @@ def update_governance_panel(_):
     ) if anomalies_data else html.P("No security anomalies detected.", className="text-success")
 
     # Governance posture table
-    posture_data = run_query("""
+    posture_data = run_query(f"""
         SELECT 
           workspace_id,
           permission_changes_24h,
