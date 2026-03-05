@@ -105,11 +105,30 @@ except Exception as e:
 # Read and execute setup SQL
 setup_sql_path = f"{repo_root}/sql/setup.sql"
 
-def execute_sql_file(file_path, replacements=None):
+def quote_identifier(identifier):
+    """
+    Quote SQL identifier if it contains special characters (hyphens, spaces, etc.)
+    """
+    # Check if identifier needs quoting (contains non-alphanumeric/underscore characters)
+    import re
+    if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', identifier):
+        return identifier  # No quoting needed
+    else:
+        return f'`{identifier}`'  # Quote with backticks
+
+def execute_sql_file(file_path, replacements=None, skip_errors=None):
     """
     Execute SQL file by splitting into individual statements.
     spark.sql() can only execute one statement at a time.
+    
+    Args:
+        file_path: Path to SQL file
+        replacements: Dict of placeholder replacements
+        skip_errors: List of error patterns to skip (e.g., ['PERMISSION_DENIED', 'PRINCIPAL_DOES_NOT_EXIST'])
     """
+    if skip_errors is None:
+        skip_errors = ['PERMISSION_DENIED', 'PRINCIPAL_DOES_NOT_EXIST']
+    
     try:
         with open(file_path, 'r') as f:
             sql_content = f.read()
@@ -141,43 +160,76 @@ def execute_sql_file(file_path, replacements=None):
         
         # Execute each statement separately
         executed = 0
+        skipped = 0
         for stmt in statements:
             if stmt.strip():  # Skip empty statements
                 try:
                     spark.sql(stmt)
                     executed += 1
                 except Exception as e:
-                    print(f"⚠ Error executing statement: {stmt[:100]}...")
-                    print(f"   Error: {e}")
-                    # Continue with next statement
-                    continue
+                    error_str = str(e)
+                    # Check if this is a skippable error
+                    should_skip = any(err in error_str for err in skip_errors)
+                    
+                    if should_skip:
+                        if 'PERMISSION_DENIED' in error_str and 'CREATE CATALOG' in stmt:
+                            print(f"⚠ Skipped catalog creation (permission denied - catalog may already exist or require metastore admin)")
+                            skipped += 1
+                        elif 'PRINCIPAL_DOES_NOT_EXIST' in error_str:
+                            print(f"⚠ Skipped grant (principal not found - ensure {ADMIN_GROUP} and {APP_SERVICE_PRINCIPAL} exist)")
+                            skipped += 1
+                        else:
+                            print(f"⚠ Skipped statement (expected error): {stmt[:80]}...")
+                            skipped += 1
+                    else:
+                        print(f"⚠ Error executing statement: {stmt[:100]}...")
+                        print(f"   Error: {error_str[:200]}")
+                        # Continue with next statement
+                        continue
         
-        return executed
+        return executed, skipped
     except FileNotFoundError:
         raise FileNotFoundError(f"SQL file not found: {file_path}")
     except Exception as e:
         raise Exception(f"Error reading SQL file: {e}")
 
 try:
+    # Quote identifiers if they contain special characters
+    quoted_catalog = quote_identifier(CATALOG)
+    quoted_schema = quote_identifier(SCHEMA)
+    
     replacements = {
         'databricks-insights-admins': ADMIN_GROUP,
         'databricks-insights-app-sp': APP_SERVICE_PRINCIPAL,
-        '{CATALOG}': CATALOG,
-        '{SCHEMA}': SCHEMA
+        '{CATALOG}': quoted_catalog,
+        '{SCHEMA}': quoted_schema
     }
     
-    executed_count = execute_sql_file(setup_sql_path, replacements)
+    executed_count, skipped_count = execute_sql_file(
+        setup_sql_path, 
+        replacements,
+        skip_errors=['PERMISSION_DENIED', 'PRINCIPAL_DOES_NOT_EXIST']
+    )
     print(f"✓ Executed {executed_count} SQL statements")
-    print("✓ Catalog and schema created")
-    print("✓ System table grants executed")
-    print("✓ App access granted")
+    if skipped_count > 0:
+        print(f"⚠ Skipped {skipped_count} statements (expected errors - see details above)")
+    print("✓ Setup SQL execution completed")
 except FileNotFoundError as e:
     print(f"⚠ Setup SQL file not found: {e}")
     print("⚠ Please ensure sql/setup.sql exists in the repository.")
-    # Fallback: execute basic setup
+    # Fallback: execute basic setup (with quoted identifiers)
     try:
-        spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
-        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
+        quoted_catalog = quote_identifier(CATALOG)
+        quoted_schema = quote_identifier(SCHEMA)
+        try:
+            spark.sql(f"CREATE CATALOG IF NOT EXISTS {quoted_catalog}")
+        except Exception as cat_error:
+            if 'PERMISSION_DENIED' in str(cat_error):
+                print(f"⚠ Catalog creation skipped (permission denied - catalog '{CATALOG}' may already exist)")
+            else:
+                raise
+        
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {quoted_catalog}.{quoted_schema}")
         print("✓ Basic catalog and schema created (grants may need manual execution)")
     except Exception as fallback_error:
         print(f"⚠ Fallback setup also failed: {fallback_error}")
@@ -209,12 +261,14 @@ for view_file in view_files:
         with open(view_path, 'r') as f:
             view_sql = f.read()
         
-        # Replace catalog and schema placeholders
-        view_sql = view_sql.replace('{CATALOG}', CATALOG)
-        view_sql = view_sql.replace('{SCHEMA}', SCHEMA)
+        # Replace catalog and schema placeholders (with quoted identifiers)
+        quoted_catalog = quote_identifier(CATALOG)
+        quoted_schema = quote_identifier(SCHEMA)
+        view_sql = view_sql.replace('{CATALOG}', quoted_catalog)
+        view_sql = view_sql.replace('{SCHEMA}', quoted_schema)
         # Also handle legacy hardcoded values (for backward compatibility)
-        view_sql = view_sql.replace('observability.gods_eye', f'{CATALOG}.{SCHEMA}')
-        view_sql = view_sql.replace('observability.databricks_insights', f'{CATALOG}.{SCHEMA}')
+        view_sql = view_sql.replace('observability.gods_eye', f'{quoted_catalog}.{quoted_schema}')
+        view_sql = view_sql.replace('observability.databricks_insights', f'{quoted_catalog}.{quoted_schema}')
         
         spark.sql(view_sql)
         view_name = view_file.replace('.sql', '').replace('01_', '').replace('02_', '').replace('03_', '').replace('04_', '').replace('05_', '')
