@@ -411,8 +411,8 @@ if AI_ENDPOINT_NAME:
             print(f"   Please create manually in UI: Serving → Create Serving Endpoint")
             print(f"   Name: {AI_ENDPOINT_NAME}")
             print(f"   Model: {AI_MODEL_NAME}")
-except Exception as e:
-    print(f"⚠ Skipping AI endpoint creation: {e}")
+    except Exception as e:
+        print(f"⚠ Skipping AI endpoint creation: {e}")
 
 # COMMAND ----------
 
