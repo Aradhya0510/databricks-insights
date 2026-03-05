@@ -5,13 +5,15 @@ bundle:
   name: databricks-insights
 
 workspace:
-  host: https://<your-workspace-url>
+  host: ${var.workspace_url}
 
 variables:
+  workspace_url:
+    description: Databricks workspace URL (e.g., https://your-workspace.cloud.databricks.com)
   warehouse_id:
     description: Serverless SQL warehouse ID for the app
   catalog:
-    default: observability
+    default: main
   schema:
     default: databricks_insights
 
@@ -58,12 +60,10 @@ resources:
       source_code_path: ./app/
       resources:
         - name: sql-warehouse
-          type: sql_warehouse
           sql_warehouse:
             id: ${var.warehouse_id}
             permission: CAN_USE
         - name: serving-endpoint
-          type: serving_endpoint
           serving_endpoint:
             name: databricks-insights-ai-endpoint
             permission: CAN_QUERY
