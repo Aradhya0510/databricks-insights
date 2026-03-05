@@ -43,11 +43,20 @@ SYSTEM_PROMPT = get_system_prompt()
 
 def query_ai_endpoint(user_message: str) -> str:
     """Send a message to the model serving endpoint."""
-    endpoint_url = os.environ.get("DATABRICKS_SERVING_ENDPOINT")
+    from utils.config import AI_ENDPOINT_URL, AI_ENDPOINT_NAME
+    
+    # Try to get endpoint URL from environment (set by app.yaml) or config
+    endpoint_url = os.environ.get("DATABRICKS_SERVING_ENDPOINT") or AI_ENDPOINT_URL
     token = os.environ.get("DATABRICKS_TOKEN")
 
-    if not endpoint_url or not token:
-        return "Error: AI endpoint not configured. Please set DATABRICKS_SERVING_ENDPOINT and DATABRICKS_TOKEN environment variables."
+    if not endpoint_url:
+        if AI_ENDPOINT_NAME:
+            return f"AI endpoint '{AI_ENDPOINT_NAME}' is configured but not available. The endpoint may need to be created or the app needs to be redeployed with the serving endpoint resource."
+        else:
+            return "AI endpoint is not configured. Set AI_ENDPOINT_NAME in deploy/config.py and redeploy the app, or set DATABRICKS_SERVING_ENDPOINT environment variable."
+    
+    if not token:
+        return "Error: DATABRICKS_TOKEN not available. This should be automatically provided by Databricks Apps."
 
     try:
         response = requests.post(

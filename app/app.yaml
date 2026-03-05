@@ -12,10 +12,14 @@ resources:
   - name: sql-warehouse
     type: sql_warehouse
     sql_warehouse:
+      # Warehouse ID - will be updated by deploy/00_deploy.py from deploy/config.py
+      # Or set manually to your warehouse ID
       id: "<your-warehouse-id>"
       permission: CAN_USE
-  - name: serving-endpoint
-    type: serving_endpoint
-    serving_endpoint:
-      name: "databricks-insights-ai-endpoint"
-      permission: CAN_QUERY
+  # Serving endpoint is optional - will be added by deploy/00_deploy.py if AI_ENDPOINT_NAME is set
+  # Uncomment manually if you have an AI endpoint:
+  # - name: serving-endpoint
+  #   type: serving_endpoint
+  #   serving_endpoint:
+  #     name: "databricks-insights-ai-endpoint"
+  #     permission: CAN_QUERY

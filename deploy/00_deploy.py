@@ -427,16 +427,48 @@ except Exception as e:
 # COMMAND ----------
 
 # MAGIC %md
-# ## Step 7: Deploy Databricks App
+# ## Step 7: Sync App Configuration and Deploy
 
 # COMMAND ----------
 
+# Sync app.yaml with config.py values
+try:
+    import yaml
+    app_yaml_path = f"{repo_root}/app/app.yaml"
+    
+    if os.path.exists(app_yaml_path):
+        with open(app_yaml_path, 'r') as f:
+            app_config = yaml.safe_load(f)
+        
+        # Update warehouse ID in app.yaml
+        if 'resources' in app_config:
+            for resource in app_config.get('resources', []):
+                if 'sql_warehouse' in resource:
+                    resource['sql_warehouse']['id'] = WAREHOUSE_ID
+                    print(f"✓ Updated app.yaml with warehouse ID: {WAREHOUSE_ID}")
+                
+                # Update or add serving endpoint if configured
+                if AI_ENDPOINT_NAME and 'serving_endpoint' in resource:
+                    resource['serving_endpoint']['name'] = AI_ENDPOINT_NAME
+                    print(f"✓ Updated app.yaml with AI endpoint: {AI_ENDPOINT_NAME}")
+        
+        # Write updated app.yaml
+        with open(app_yaml_path, 'w') as f:
+            yaml.dump(app_config, f, default_flow_style=False, sort_keys=False)
+        
+        print("✓ App configuration synced from deploy/config.py")
+    else:
+        print(f"⚠ app.yaml not found at {app_yaml_path}")
+except ImportError:
+    print("⚠ PyYAML not available - skipping app.yaml sync")
+    print("   Install with: %pip install pyyaml")
+except Exception as e:
+    print(f"⚠ Error syncing app config: {e}")
+
 # Note: App deployment via API is limited. Use Asset Bundles or CLI instead
-print("⚠ App deployment via notebook is limited.")
-print("   Recommended: Use Databricks Asset Bundles or CLI:")
-print(f"   databricks bundle deploy")
-print(f"   OR")
-print(f"   databricks apps deploy {APP_NAME} --source-code-path ./app/")
+print("\n📋 To deploy the app:")
+print(f"   1. Sync files: databricks sync . /Workspace/Users/aradhya.chouhan@databricks.com/databricks-insights")
+print(f"   2. Deploy app: databricks apps deploy {APP_NAME} --source-code-path /Workspace/Users/aradhya.chouhan@databricks.com/databricks-insights/app")
 print(f"\n   App will be accessible at: {WORKSPACE_URL}/apps/{APP_NAME}")
 
 # COMMAND ----------
