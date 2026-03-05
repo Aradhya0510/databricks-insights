@@ -4,6 +4,7 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
 from utils.db_connector import run_query
+from utils.config import SCHEMA_PATH
 
 dash.register_page(__name__, path="/jobs", name="Jobs & Pipelines")
 
@@ -53,7 +54,7 @@ def update_jobs_panel(_):
           COUNT(*) AS total_jobs,
           AVG(success_rate_pct) AS avg_success_rate,
           SUM(failure_count) AS total_failures_30d
-        FROM observability.databricks_insights.gold_job_health
+        FROM {SCHEMA_PATH}.gold_job_health
     """)
 
     kpis = dbc.Row([
@@ -73,7 +74,7 @@ def update_jobs_panel(_):
 
     # Failing jobs
     failing = run_query("""
-        SELECT * FROM observability.databricks_insights.v_currently_failing_jobs LIMIT 25
+        SELECT * FROM {SCHEMA_PATH}.v_currently_failing_jobs LIMIT 25
     """)
     failing_table = dbc.Table.from_dataframe(
         pd.DataFrame(failing),
@@ -83,7 +84,7 @@ def update_jobs_panel(_):
     # Job success chart — top 30 jobs by run count
     job_data = run_query("""
         SELECT job_name, success_rate_pct, total_runs_30d, failure_count
-        FROM observability.databricks_insights.gold_job_health
+        FROM {SCHEMA_PATH}.gold_job_health
         ORDER BY total_runs_30d DESC LIMIT 30
     """)
     job_df = pd.DataFrame(job_data)
@@ -99,7 +100,7 @@ def update_jobs_panel(_):
     # Pipeline health
     pipelines = run_query("""
         SELECT name, total_updates_7d, success_count, failure_count, success_rate_pct
-        FROM observability.databricks_insights.gold_pipeline_health
+        FROM {SCHEMA_PATH}.gold_pipeline_health
         ORDER BY failure_count DESC
     """)
     pipeline_table = dbc.Table.from_dataframe(

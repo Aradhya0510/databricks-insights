@@ -3,6 +3,7 @@ from dash import html, dcc, callback, Output, Input
 import dash_bootstrap_components as dbc
 import pandas as pd
 from utils.db_connector import run_query
+from utils.config import SCHEMA_PATH
 
 dash.register_page(__name__, path="/governance", name="Governance")
 
@@ -48,12 +49,12 @@ def update_governance_panel(_):
           SUM(ip_denials_24h) AS total_ip_denials,
           SUM(destructive_ops_24h) AS total_destructive,
           SUM(admin_group_changes_24h) AS total_admin_changes
-        FROM observability.databricks_insights.gold_governance_posture
+        FROM {SCHEMA_PATH}.gold_governance_posture
     """)
 
     # Get anomaly count
     anomalies = run_query("""
-        SELECT COUNT(*) AS cnt FROM observability.databricks_insights.v_security_anomalies
+        SELECT COUNT(*) AS cnt FROM {SCHEMA_PATH}.v_security_anomalies
     """)
 
     kpis = dbc.Row([
@@ -86,7 +87,7 @@ def update_governance_panel(_):
 
     # Security anomalies table
     anomalies_data = run_query("""
-        SELECT * FROM observability.databricks_insights.v_security_anomalies
+        SELECT * FROM {SCHEMA_PATH}.v_security_anomalies
         ORDER BY event_time DESC
         LIMIT 50
     """)
@@ -103,7 +104,7 @@ def update_governance_panel(_):
           ip_denials_24h,
           destructive_ops_24h,
           admin_group_changes_24h
-        FROM observability.databricks_insights.gold_governance_posture
+        FROM {SCHEMA_PATH}.gold_governance_posture
     """)
     posture_table = dbc.Table.from_dataframe(
         pd.DataFrame(posture_data),

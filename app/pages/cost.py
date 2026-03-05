@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 from utils.db_connector import run_query
+from utils.config import SCHEMA_PATH
 
 dash.register_page(__name__, path="/", name="Cost & Compute")
 
@@ -90,16 +91,16 @@ def update_cost_panel(_):
         WHERE u.usage_date >= DATE_TRUNC('MONTH', CURRENT_DATE)
     """)
 
-    active_clusters = run_query("""
+    active_clusters = run_query(f"""
         SELECT COUNT(DISTINCT cluster_id) AS cnt
-        FROM observability.databricks_insights.gold_compute_inventory
+        FROM {SCHEMA_PATH}.gold_compute_inventory
         WHERE health_status = 'ACTIVE'
     """)
 
-    zombie_count = run_query("""
+    zombie_count = run_query(f"""
         SELECT COUNT(DISTINCT cluster_id) AS cnt
-        FROM observability.databricks_insights.gold_compute_inventory
-        WHERE health_status = 'ZOMBIE'
+        FROM {SCHEMA_PATH}.gold_compute_inventory
+        WHERE health_status = 'IDLE'
     """)
 
     kpi_cards = dbc.Row([
@@ -133,9 +134,9 @@ def update_cost_panel(_):
     ])
 
     # Burn rate chart
-    burn_data = run_query("""
+    burn_data = run_query(f"""
         SELECT hour, cost_usd, rolling_24h_avg
-        FROM observability.databricks_insights.v_realtime_burn_rate
+        FROM {SCHEMA_PATH}.v_realtime_burn_rate
         ORDER BY hour
     """)
     burn_df = pd.DataFrame(burn_data)
@@ -148,9 +149,9 @@ def update_cost_panel(_):
     burn_fig.update_layout(template="plotly_dark", height=400, margin=dict(l=40, r=20, t=20, b=40))
 
     # Cost by product
-    product_data = run_query("""
+    product_data = run_query(f"""
         SELECT product, SUM(estimated_cost_usd) AS cost
-        FROM observability.databricks_insights.gold_cost_daily
+        FROM {SCHEMA_PATH}.gold_cost_daily
         WHERE date >= CURRENT_DATE - INTERVAL 30 DAYS
         GROUP BY product
         ORDER BY cost DESC
@@ -161,17 +162,17 @@ def update_cost_panel(_):
     product_fig.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
 
     # Top cost drivers
-    drivers = run_query("SELECT * FROM observability.databricks_insights.v_top_cost_drivers LIMIT 20")
+    drivers = run_query(f"SELECT * FROM {SCHEMA_PATH}.v_top_cost_drivers LIMIT 20")
     drivers_table = dbc.Table.from_dataframe(
         pd.DataFrame(drivers),
         striped=True, bordered=True, hover=True, dark=True, responsive=True,
     ) if drivers else html.P("No data available")
 
     # Zombie clusters
-    zombies = run_query("""
+    zombies = run_query(f"""
         SELECT cluster_id, cluster_name, owner, dbus_last_7d, last_active_time
-        FROM observability.databricks_insights.gold_compute_inventory
-        WHERE health_status = 'ZOMBIE'
+        FROM {SCHEMA_PATH}.gold_compute_inventory
+        WHERE health_status = 'IDLE'
     """)
     zombies_table = dbc.Table.from_dataframe(
         pd.DataFrame(zombies),

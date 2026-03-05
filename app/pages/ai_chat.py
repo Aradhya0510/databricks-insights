@@ -5,15 +5,17 @@ import os
 import json
 import requests
 from utils.db_connector import run_query
+from utils.config import SCHEMA_PATH
 
 dash.register_page(__name__, path="/ai", name="AI Assistant")
 
 # System prompt with schema context
-SYSTEM_PROMPT = """You are Databricks Insights AI, an expert Databricks workspace analyst.
+def get_system_prompt():
+    return f"""You are Databricks Insights AI, an expert Databricks workspace analyst.
 You help admins understand their workspace costs, job health, security posture,
 and user activity.
 
-You have access to the following tables in the `observability.databricks_insights` schema:
+You have access to the following tables in the `{SCHEMA_PATH}` schema:
 
 1. gold_cost_daily: columns [date, workspace_id, product, sku_name,
    total_dbus, estimated_cost_usd, unique_users]
@@ -35,6 +37,8 @@ When asked a question:
 2. Return ONLY the SQL wrapped in ```sql``` code blocks
 3. Keep queries simple and efficient
 """
+
+SYSTEM_PROMPT = get_system_prompt()
 
 
 def query_ai_endpoint(user_message: str) -> str:

@@ -4,6 +4,7 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
 from utils.db_connector import run_query
+from utils.config import SCHEMA_PATH
 
 dash.register_page(__name__, path="/users", name="Users")
 
@@ -44,7 +45,7 @@ def update_users_panel(_):
           COUNT(DISTINCT user_email) AS total_users,
           SUM(login_count_30d) AS total_logins,
           SUM(estimated_cost_30d) AS total_user_cost
-        FROM observability.databricks_insights.gold_user_activity
+        FROM {SCHEMA_PATH}.gold_user_activity
     """)
 
     kpis = dbc.Row([
@@ -69,7 +70,7 @@ def update_users_panel(_):
           estimated_cost_30d,
           login_count_30d,
           active_days
-        FROM observability.databricks_insights.gold_user_activity
+        FROM {SCHEMA_PATH}.gold_user_activity
         WHERE estimated_cost_30d IS NOT NULL
         ORDER BY estimated_cost_30d DESC
         LIMIT 20
@@ -95,7 +96,7 @@ def update_users_panel(_):
           active_days,
           last_login,
           estimated_cost_30d
-        FROM observability.databricks_insights.gold_user_activity
+        FROM {SCHEMA_PATH}.gold_user_activity
         ORDER BY estimated_cost_30d DESC NULLS LAST
         LIMIT 25
     """)
