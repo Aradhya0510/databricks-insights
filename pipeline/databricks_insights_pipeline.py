@@ -132,9 +132,9 @@ def gold_compute_inventory():
             "cluster_name",
             F.col("owned_by").alias("owner"),
             "cluster_source",
-            # Removed node_type_id and driver_node_type_id - these columns don't exist in system.compute.clusters
-            "autoscale",
-            "num_workers",
+            # Removed columns that don't exist in system.compute.clusters:
+            # - driver_node_type_id, node_type_id, autoscale, num_workers
+            # These may vary by Databricks version or cluster type
             F.coalesce("dbus_last_7d", F.lit(0)).alias("dbus_last_7d"),
             "last_active_time",
             F.when(
