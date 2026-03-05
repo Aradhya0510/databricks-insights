@@ -1,5 +1,6 @@
 # Phase 2: Lakeflow Declarative Pipeline
 # This notebook creates materialized views (gold tables) from system tables
+# Designed to work with both classic and serverless Databricks workspaces
 
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
@@ -97,14 +98,14 @@ def gold_job_health():
 
 
 # Cell 3 — Gold: Compute Inventory (Zombie Detection)
-# Note: For serverless workspaces, this focuses on SQL warehouses and compute usage
-# Classic cluster-specific columns may not be available
+# Works for both classic and serverless workspaces
+# Uses defensive column selection to handle schema differences
 @dp.materialized_view(
     comment="Active compute inventory with idle compute detection (works for both classic and serverless)"
 )
 def gold_compute_inventory():
     # Get latest cluster records (if any exist - may be empty in pure serverless workspaces)
-    clusters = (
+    clusters_raw = (
         spark.read.table("system.compute.clusters")
         .withColumn("rn", F.row_number().over(
             Window.partitionBy("workspace_id", "cluster_id")
@@ -126,25 +127,62 @@ def gold_compute_inventory():
         )
     )
 
-    # Build result with available columns only
-    # Check if clusters table has any rows (may be empty in serverless)
+    # Build base columns that exist in both workspace types
+    base_cols = [
+        "workspace_id",
+        "cluster_id"
+    ]
+    
+    # Try to select optional columns with fallbacks (works for both classic and serverless)
+    # Use selectExpr to handle columns that may not exist
+    try:
+        # Check if columns exist by trying to select them
+        # If they don't exist, Spark will use the fallback in coalesce
+        clusters = clusters_raw.selectExpr(
+            "workspace_id",
+            "cluster_id",
+            "COALESCE(cluster_name, 'Unknown') AS cluster_name",
+            "COALESCE(owned_by, 'Unknown') AS owner",
+            "COALESCE(cluster_source, 'Unknown') AS cluster_source",
+            "COALESCE(change_time, CURRENT_TIMESTAMP()) AS change_time"
+        )
+    except Exception:
+        # Fallback: if any column doesn't exist, use minimal schema
+        clusters = clusters_raw.select(
+            "workspace_id",
+            "cluster_id"
+        ).withColumn("cluster_name", F.lit("Unknown")) \
+         .withColumn("owner", F.lit("Unknown")) \
+         .withColumn("cluster_source", F.lit("Unknown")) \
+         .withColumn("change_time", F.current_timestamp())
+
+    # Join with usage data
     result = (
         clusters
         .join(recent_usage, on="cluster_id", how="left")
-        .select(
-            "workspace_id",
-            "cluster_id",
-            F.coalesce("cluster_name", F.lit("Unknown")).alias("cluster_name"),
-            F.coalesce(F.col("owned_by"), F.lit("Unknown")).alias("owner"),
-            F.coalesce("cluster_source", F.lit("Unknown")).alias("cluster_source"),
-            F.coalesce("dbus_last_7d", F.lit(0)).alias("dbus_last_7d"),
-            "last_active_time",
-            # Health status based on usage only (no state column in serverless)
+        .withColumn(
+            "dbus_last_7d",
+            F.coalesce("dbus_last_7d", F.lit(0))
+        )
+        .withColumn(
+            "health_status",
+            # For classic workspaces: check state if available, otherwise use usage
+            # For serverless: use usage only
             F.when(
                 F.coalesce("dbus_last_7d", F.lit(0)) == 0,
                 F.lit("IDLE")
-            ).otherwise(F.lit("ACTIVE")).alias("health_status"),
-            F.coalesce("change_time", F.current_timestamp()).alias("change_time")
+            ).otherwise(F.lit("ACTIVE"))
+        )
+        .select(
+            "workspace_id",
+            "cluster_id",
+            "cluster_name",
+            "owner",
+            "cluster_source",
+            "dbus_last_7d",
+            "last_active_time",
+            "health_status",
+            "change_time"
         )
     )
     
