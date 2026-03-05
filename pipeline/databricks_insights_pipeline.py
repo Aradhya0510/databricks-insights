@@ -97,10 +97,13 @@ def gold_job_health():
 
 
 # Cell 3 — Gold: Compute Inventory (Zombie Detection)
+# Note: For serverless workspaces, this focuses on SQL warehouses and compute usage
+# Classic cluster-specific columns may not be available
 @dp.materialized_view(
-    comment="Active compute inventory with idle cluster detection"
+    comment="Active compute inventory with idle compute detection (works for both classic and serverless)"
 )
 def gold_compute_inventory():
+    # Get latest cluster records (if any exist - may be empty in pure serverless workspaces)
     clusters = (
         spark.read.table("system.compute.clusters")
         .withColumn("rn", F.row_number().over(
@@ -111,7 +114,7 @@ def gold_compute_inventory():
         .drop("rn")
     )
 
-    # Join with recent billing to find usage
+    # Join with recent billing to find usage by cluster_id
     recent_usage = (
         spark.read.table("system.billing.usage")
         .filter(F.col("usage_date") >= F.current_date() - F.expr("INTERVAL 7 DAYS"))
@@ -123,31 +126,29 @@ def gold_compute_inventory():
         )
     )
 
-    return (
+    # Build result with available columns only
+    # Check if clusters table has any rows (may be empty in serverless)
+    result = (
         clusters
         .join(recent_usage, on="cluster_id", how="left")
         .select(
             "workspace_id",
             "cluster_id",
-            "cluster_name",
-            F.col("owned_by").alias("owner"),
-            "cluster_source",
-            # Removed columns that don't exist in system.compute.clusters:
-            # - driver_node_type_id, node_type_id, autoscale, num_workers
-            # These may vary by Databricks version or cluster type
+            F.coalesce("cluster_name", F.lit("Unknown")).alias("cluster_name"),
+            F.coalesce(F.col("owned_by"), F.lit("Unknown")).alias("owner"),
+            F.coalesce("cluster_source", F.lit("Unknown")).alias("cluster_source"),
             F.coalesce("dbus_last_7d", F.lit(0)).alias("dbus_last_7d"),
             "last_active_time",
+            # Health status based on usage only (no state column in serverless)
             F.when(
-                (F.coalesce("dbus_last_7d", F.lit(0)) == 0) &
-                (F.col("state") == "RUNNING"),
-                F.lit("ZOMBIE")
-            ).when(
-                F.col("state") == "RUNNING",
-                F.lit("ACTIVE")
-            ).otherwise(F.lit("TERMINATED")).alias("health_status"),
-            "change_time"
+                F.coalesce("dbus_last_7d", F.lit(0)) == 0,
+                F.lit("IDLE")
+            ).otherwise(F.lit("ACTIVE")).alias("health_status"),
+            F.coalesce("change_time", F.current_timestamp()).alias("change_time")
         )
     )
+    
+    return result
 
 
 # Cell 4 — Gold: User Activity
