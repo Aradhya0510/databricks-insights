@@ -8,12 +8,15 @@ WORKSPACE_URL = "https://<your-workspace-url>"  # Replace with your workspace UR
 WAREHOUSE_ID = "<your-warehouse-id>"  # Replace with your serverless SQL warehouse ID
 
 # Catalog and schema configuration
-CATALOG = "observability"
+# Use 'main' catalog (already exists, no admin privileges needed)
+CATALOG = "main"
 SCHEMA = "databricks_insights"
 
-# Service principal/group names (update these to match your workspace)
-ADMIN_GROUP = "databricks-insights-admins"  # Group/service principal with system table access
-APP_SERVICE_PRINCIPAL = "databricks-insights-app-sp"  # Service principal for the app
+# User configuration (workspace users - no service principals needed)
+# These should be email addresses of workspace users
+# Leave as None to use the current user running the notebook
+INSIGHTS_USER = None  # Set to your email (e.g., "user@example.com") or None to use current user
+APP_USER = None  # Set to app user email or None to use current user
 
 # Pipeline configuration
 PIPELINE_NAME = "databricks-insights-pipeline"
@@ -34,3 +37,7 @@ AI_MODEL_NAME = "databricks-meta-llama-3-3-70b-instruct"  # Or your preferred mo
 # Job schedules
 REFRESH_SCHEDULE = "0 */15 * * * ?"  # Every 15 minutes
 ZOMBIE_CLEANUP_SCHEDULE = "0 0 */6 * * ?"  # Every 6 hours
+
+# Note: System table access grants still require metastore admin privileges
+# If you don't have admin access, ask your workspace admin to run the grants from sql/setup.sql
+# The grants can be done once and will work for all users in your workspace

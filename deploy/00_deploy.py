@@ -13,9 +13,10 @@
 # MAGIC 
 # MAGIC **Prerequisites:**
 # MAGIC - System tables enabled (Account Admin)
-# MAGIC - Databricks Apps enabled (Workspace Admin)
+# MAGIC - Databricks Apps enabled (Workspace Admin) - optional
 # MAGIC - Serverless SQL warehouse already created
-# MAGIC - Metastore admin privileges for grants
+# MAGIC - System table grants require metastore admin (one-time setup)
+# MAGIC - Regular users can create schemas and views in 'main' catalog
 
 # COMMAND ----------
 
@@ -74,15 +75,31 @@ except ImportError:
     # Fallback defaults
     WORKSPACE_URL = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiUrl().get()
     WAREHOUSE_ID = "<your-warehouse-id>"
-    CATALOG = "observability"
+    CATALOG = "main"
     SCHEMA = "databricks_insights"
-    ADMIN_GROUP = "databricks-insights-admins"
-    APP_SERVICE_PRINCIPAL = "databricks-insights-app-sp"
+    INSIGHTS_USER = None
+    APP_USER = None
     PIPELINE_NAME = "databricks-insights-pipeline"
     APP_NAME = "databricks-insights-app"
     AI_ENDPOINT_NAME = None
     REFRESH_SCHEDULE = "0 */15 * * * ?"
     ZOMBIE_CLEANUP_SCHEDULE = "0 0 */6 * * ?"
+
+# Get current user if not specified in config
+try:
+    current_user = spark.sql("SELECT current_user()").collect()[0][0]
+    print(f"✓ Current user: {current_user}")
+except:
+    current_user = None
+
+# Use current user if not specified
+if INSIGHTS_USER is None:
+    INSIGHTS_USER = current_user
+    print(f"✓ Using current user for insights: {INSIGHTS_USER}")
+
+if APP_USER is None:
+    APP_USER = current_user
+    print(f"✓ Using current user for app: {APP_USER}")
 
 print(f"📁 Repo root: {repo_root}")
 
@@ -188,15 +205,15 @@ def execute_sql_file(file_path, replacements=None, skip_errors=None):
                         if 'PERMISSION_DENIED' in error_str and 'CREATE CATALOG' in stmt:
                             print(f"⚠ Skipped catalog creation (permission denied - catalog may already exist or require metastore admin)")
                             skipped += 1
-                        elif 'PRINCIPAL_DOES_NOT_EXIST' in error_str or 'does not exist' in error_str.lower():
-                            # Extract which principal is missing from the statement
-                            principal_name = "unknown"
-                            if ADMIN_GROUP in stmt or 'databricks-insights-admins' in stmt:
-                                principal_name = ADMIN_GROUP
-                            elif APP_SERVICE_PRINCIPAL in stmt or 'databricks-insights-app-sp' in stmt:
-                                principal_name = APP_SERVICE_PRINCIPAL
+                        elif 'PRINCIPAL_DOES_NOT_EXIST' in error_str or 'does not exist' in error_str.lower() or 'USER_DOES_NOT_EXIST' in error_str:
+                            # Extract which user is missing from the statement
+                            user_name = "unknown"
+                            if INSIGHTS_USER in stmt or '{INSIGHTS_USER}' in stmt:
+                                user_name = INSIGHTS_USER
+                            elif APP_USER in stmt or '{APP_USER}' in stmt:
+                                user_name = APP_USER
                             
-                            print(f"⚠ Skipped grant to '{principal_name}' (principal not found - create it first or update config.py)")
+                            print(f"⚠ Skipped grant to '{user_name}' (user not found - ensure user exists in workspace or update config.py)")
                             skipped += 1
                         else:
                             print(f"⚠ Skipped statement (expected error): {stmt[:80]}...")
@@ -220,10 +237,10 @@ try:
     quoted_schema = quote_identifier(SCHEMA)
     
     replacements = {
-        'databricks-insights-admins': ADMIN_GROUP,
-        'databricks-insights-app-sp': APP_SERVICE_PRINCIPAL,
         '{CATALOG}': quoted_catalog,
-        '{SCHEMA}': quoted_schema
+        '{SCHEMA}': quoted_schema,
+        '{INSIGHTS_USER}': INSIGHTS_USER,
+        '{APP_USER}': APP_USER
     }
     
     executed_count, skipped_count, failed_count = execute_sql_file(
@@ -242,13 +259,15 @@ try:
     
     if skipped_count > 0:
         print(f"\n📋 Next Steps:")
-        print(f"  1. If catalog creation was skipped: Ensure you have metastore admin privileges")
-        print(f"     OR the catalog '{CATALOG}' already exists")
-        print(f"  2. If grants were skipped: Create the following principals first:")
-        print(f"     - Group/Service Principal: {ADMIN_GROUP}")
-        print(f"     - Service Principal: {APP_SERVICE_PRINCIPAL}")
-        print(f"     Then re-run this notebook or execute the grants manually")
-        print(f"  3. After creating principals, you can re-run just the grant statements from sql/setup.sql")
+        print(f"  1. If schema creation was skipped: Ensure you have CREATE SCHEMA privileges on catalog '{CATALOG}'")
+        print(f"     (Using 'main' catalog requires no special privileges)")
+        print(f"  2. If system table grants were skipped: These require metastore admin privileges")
+        print(f"     Ask your workspace admin to run section 2 from sql/setup.sql ONCE")
+        print(f"     After that, all workspace users can access system tables")
+        print(f"  3. If user grants were skipped: Ensure these users exist in your workspace:")
+        print(f"     - Insights user: {INSIGHTS_USER}")
+        print(f"     - App user: {APP_USER}")
+        print(f"     Update config.py with correct user emails if needed")
     
     if failed_count == 0:
         print("✓ Setup SQL execution completed")
@@ -261,16 +280,9 @@ except FileNotFoundError as e:
     try:
         quoted_catalog = quote_identifier(CATALOG)
         quoted_schema = quote_identifier(SCHEMA)
-        try:
-            spark.sql(f"CREATE CATALOG IF NOT EXISTS {quoted_catalog}")
-        except Exception as cat_error:
-            if 'PERMISSION_DENIED' in str(cat_error):
-                print(f"⚠ Catalog creation skipped (permission denied - catalog '{CATALOG}' may already exist)")
-            else:
-                raise
-        
+        # No need to create catalog - using 'main' which already exists
         spark.sql(f"CREATE SCHEMA IF NOT EXISTS {quoted_catalog}.{quoted_schema}")
-        print("✓ Basic catalog and schema created (grants may need manual execution)")
+        print("✓ Basic schema created (grants may need manual execution)")
     except Exception as fallback_error:
         print(f"⚠ Fallback setup also failed: {fallback_error}")
 except Exception as e:
