@@ -99,7 +99,7 @@ def gold_job_health():
 
 # Cell 3 — Gold: Compute Inventory (Zombie Detection)
 # Works for both classic and serverless workspaces
-# Uses defensive column selection to handle schema differences
+# Uses schema-aware column selection to handle differences between workspace types
 @dp.materialized_view(
     comment="Active compute inventory with idle compute detection (works for both classic and serverless)"
 )
@@ -127,36 +127,41 @@ def gold_compute_inventory():
         )
     )
 
-    # Build base columns that exist in both workspace types
-    base_cols = [
+    # Get schema to check which columns exist (works for both workspace types)
+    schema = clusters_raw.schema
+    schema_cols = {field.name.lower() for field in schema.fields}
+    
+    # Build select list dynamically based on available columns
+    select_exprs = [
         "workspace_id",
         "cluster_id"
     ]
     
-    # Try to select optional columns with fallbacks (works for both classic and serverless)
-    # Use selectExpr to handle columns that may not exist
-    try:
-        # Check if columns exist by trying to select them
-        # If they don't exist, Spark will use the fallback in coalesce
-        clusters = clusters_raw.selectExpr(
-            "workspace_id",
-            "cluster_id",
-            "COALESCE(cluster_name, 'Unknown') AS cluster_name",
-            "COALESCE(owned_by, 'Unknown') AS owner",
-            "COALESCE(cluster_source, 'Unknown') AS cluster_source",
-            "COALESCE(change_time, CURRENT_TIMESTAMP()) AS change_time"
-        )
-    except Exception:
-        # Fallback: if any column doesn't exist, use minimal schema
-        clusters = clusters_raw.select(
-            "workspace_id",
-            "cluster_id"
-        ).withColumn("cluster_name", F.lit("Unknown")) \
-         .withColumn("owner", F.lit("Unknown")) \
-         .withColumn("cluster_source", F.lit("Unknown")) \
-         .withColumn("change_time", F.current_timestamp())
+    # Add optional columns if they exist, with fallbacks
+    if "cluster_name" in schema_cols:
+        select_exprs.append("COALESCE(cluster_name, 'Unknown') AS cluster_name")
+    else:
+        select_exprs.append("'Unknown' AS cluster_name")
+    
+    if "owned_by" in schema_cols:
+        select_exprs.append("COALESCE(owned_by, 'Unknown') AS owner")
+    else:
+        select_exprs.append("'Unknown' AS owner")
+    
+    if "cluster_source" in schema_cols:
+        select_exprs.append("COALESCE(cluster_source, 'Unknown') AS cluster_source")
+    else:
+        select_exprs.append("'Unknown' AS cluster_source")
+    
+    if "change_time" in schema_cols:
+        select_exprs.append("COALESCE(change_time, CURRENT_TIMESTAMP()) AS change_time")
+    else:
+        select_exprs.append("CURRENT_TIMESTAMP() AS change_time")
+    
+    # Select columns using the dynamic expression list
+    clusters = clusters_raw.selectExpr(*select_exprs)
 
-    # Join with usage data
+    # Join with usage data and calculate health status
     result = (
         clusters
         .join(recent_usage, on="cluster_id", how="left")
@@ -166,8 +171,9 @@ def gold_compute_inventory():
         )
         .withColumn(
             "health_status",
-            # For classic workspaces: check state if available, otherwise use usage
-            # For serverless: use usage only
+            # Health status based on usage (works for both classic and serverless)
+            # Classic: may have state column, but we use usage for consistency
+            # Serverless: uses usage only
             F.when(
                 F.coalesce("dbus_last_7d", F.lit(0)) == 0,
                 F.lit("IDLE")
